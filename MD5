@@ -1,8 +1,10 @@
-9acb54d5f0f883d868545270e71c1ca8 *DESCRIPTION
+265593c84183a704186efe199463c3bd *DESCRIPTION
 a25f296170e6d3a817250fc95af87205 *LICENCE
 235978f6b685e1b6056670a29fb3d39a *NAMESPACE
-1d91dc92a1622b135804a6bcdbb66d4d *R/png.R
+2f923ca8c3b0c91ea7a3e41be7a33bde *NEWS.md
+8a02c20d370642c02ef2f18e032ba477 *R/png.R
 570f130cb62b01b8fe1fa95eb194f76f *R/zzz.R
+1998be675c9a94d9bdb83bee797f3395 *README.md
 5ace0621c5063d799af2afe2804dcb54 *inst/extdata/pngsuite/basi6a08.png
 0aee1180d7f22e16d32632dbde4dad9f *inst/extdata/pngsuite/basn0g01.png
 71bcf617735655b514639fbb4a9397c3 *inst/extdata/pngsuite/basn0g02.png
@@ -25,9 +27,9 @@ dbdc60239ac21191d9a38e1ae05f05f5 *inst/extdata/pngsuite/cdun2c08.png
 e7f862fc395d00897db76419408f44b7 *inst/extdata/pngsuite/z03n2c08.png
 32f64b6f8d31bdc9876ed88f18c16da3 *man/readPng.Rd
 ece5447aa04819afc17c55e39e9b98af *man/writePng.Rd
-5811b0195c0332895b98627aa6309fc6 *src/lodepng.c
+ce41630b10db2a50f10d7a3de2e992be *src/lodepng.c
 bb5a70f66b1fa30d9334780d29bccf51 *src/lodepng.h
-2da74e829bfbe3e46bc0d263b3857699 *src/main.c
+2fa20f9069effbde6afd5adf7c95be39 *src/main.c
 e6ea0aaab712844021535c6e7fa9499a *tests/testthat.R
 1b27d8beeb1311f199e38774a4805558 *tests/testthat/test-05-read.R
 e4b4b5b1e9ce6fa3964562cd3da25349 *tests/testthat/test-10-metadata.R

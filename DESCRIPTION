@@ -1,6 +1,6 @@
 Package: loder
-Version: 0.1.0
-Date: 2017-05-05
+Version: 0.1.2
+Date: 2017-05-30
 Title: Dependency-Free Access to PNG Image Files
 Authors@R: c(person("Jon", "Clayden", email="code@clayden.org", role=c("aut","cre")),
              person("Lode", "Vandevenne", role="aut"))
@@ -14,9 +14,9 @@ BugReports: https://github.com/jonclayden/loder/issues
 LazyData: true
 RoxygenNote: 6.0.1
 NeedsCompilation: yes
-Packaged: 2017-05-05 15:32:29 UTC; jon
+Packaged: 2017-05-30 13:20:49 UTC; jon
 Author: Jon Clayden [aut, cre],
   Lode Vandevenne [aut]
 Maintainer: Jon Clayden <code@clayden.org>
 Repository: CRAN
-Date/Publication: 2017-05-05 21:50:33 UTC
+Date/Publication: 2017-05-30 15:35:55 UTC
