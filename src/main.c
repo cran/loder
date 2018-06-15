@@ -6,8 +6,20 @@
 
 #include "lodepng.h"
 
-SEXP read_png (SEXP file_)
+// Predefined compression levels
+// Elements are block type, use LZ77, window size, minimum LZ77 length, threshold length to stop searching, use lazy matching
+// Last three elements are for custom hooks and are not used here
+const LodePNGCompressSettings level0 = { 0, 0,  2048, 3,  16, 0, 0, 0, 0 };  // No compression
+const LodePNGCompressSettings level1 = { 1, 1,   256, 3,  32, 1, 0, 0, 0 };  // Fixed Huffman tree, small window
+const LodePNGCompressSettings level2 = { 1, 1,  1024, 3,  64, 1, 0, 0, 0 };  // Fixed Huffman tree, medium window
+const LodePNGCompressSettings level3 = { 2, 1,  1024, 3,  64, 1, 0, 0, 0 };  // Dynamic tree, medium window
+const LodePNGCompressSettings level4 = { 2, 1,  2048, 3, 128, 1, 0, 0, 0 };  // LodePNG defaults
+const LodePNGCompressSettings level5 = { 2, 1,  8192, 3, 128, 1, 0, 0, 0 };  // Dynamic tree, large window
+const LodePNGCompressSettings level6 = { 2, 1, 32768, 3, 258, 1, 0, 0, 0 };  // Maximum compression
+
+SEXP read_png (SEXP file_, SEXP require_data_)
 {
+    const Rboolean require_data = (Rf_asLogical(require_data_) == TRUE);
     unsigned error;
     unsigned width, height, channels = 0;
     unsigned char *png = NULL, *data = NULL;
@@ -57,10 +69,9 @@ SEXP read_png (SEXP file_)
     
     // Allocate memory for the final image
     R_len_t length;
-    SEXP image, dim, range, class, asp, dpi, pixdim;
+    SEXP image, dim, class, asp, dpi, pixdim, text_keys, text_vals;
     char background[8] = "";
     length = (R_len_t) width * height * channels;
-    PROTECT(image = Rf_allocVector(INTSXP,length));
     
     // Set the required colour type and bit depth, and decode the blob
     state.info_raw.colortype = (state.info_png.color.colortype == LCT_PALETTE ? LCT_RGBA : state.info_png.color.colortype);
@@ -73,52 +84,81 @@ SEXP read_png (SEXP file_)
         Rf_error("LodePNG error: %s\n", lodepng_error_text(error));
     }
     
-    // LodePNG returns pixel data with dimensions reversed relative to R, so we need to correct it back
-    int *image_ptr = INTEGER(image);
-    size_t image_strides[2] = { (size_t) height, (size_t) height * width };
-    size_t data_strides[2] = { (size_t) channels, (size_t) channels * width };
-    size_t image_offset, data_offset;
-    for (unsigned i=0; i<height; i++)
+    if (require_data)
     {
-        data_offset = i * data_strides[1];
-        for (unsigned j=0; j<width; j++)
+        // LodePNG returns pixel data with dimensions reversed relative to R, so we need to correct it back
+        PROTECT(image = Rf_allocVector(INTSXP,length));
+        int *image_ptr = INTEGER(image);
+        size_t image_strides[2] = { (size_t) height, (size_t) height * width };
+        size_t data_strides[2] = { (size_t) channels, (size_t) channels * width };
+        size_t image_offset, data_offset;
+        for (unsigned i=0; i<height; i++)
         {
-            image_offset = j * image_strides[0];
-            for (unsigned k=0; k<channels; k++)
-                image_ptr[i+image_offset+k*image_strides[1]] = (int) data[k+data_offset];
-            data_offset += data_strides[0];
+            data_offset = i * data_strides[1];
+            for (unsigned j=0; j<width; j++)
+            {
+                image_offset = j * image_strides[0];
+                for (unsigned k=0; k<channels; k++)
+                    image_ptr[i+image_offset+k*image_strides[1]] = (int) data[k+data_offset];
+                data_offset += data_strides[0];
+            }
         }
+        
+        // Set the image dimensions
+        PROTECT(dim = Rf_allocVector(INTSXP,3));
+        int *dim_ptr = INTEGER(dim);
+        dim_ptr[0] = height;
+        dim_ptr[1] = width;
+        dim_ptr[2] = channels;
+        Rf_setAttrib(image, R_DimSymbol, dim);
+        
+        // Set the object class
+        PROTECT(class = Rf_allocVector(STRSXP,2));
+        SET_STRING_ELT(class, 0, Rf_mkChar("loder"));
+        SET_STRING_ELT(class, 1, Rf_mkChar("array"));
+        Rf_setAttrib(image, R_ClassSymbol, class);
+        
+        // Set the theoretical range of the data
+        SEXP range;
+        PROTECT(range = Rf_allocVector(INTSXP,2));
+        INTEGER(range)[0] = 0;
+        INTEGER(range)[1] = 255;
+        Rf_setAttrib(image, Rf_install("range"), range);
+        
+        UNPROTECT(3);
+    }
+    else
+    {
+        // We don't need the data, so just return the input vector with attributes
+        PROTECT(image = Rf_duplicate(file_));
+        
+        // Set the object class and other basic attributes
+        Rf_setAttrib(image, R_ClassSymbol, PROTECT(Rf_mkString("lodermeta")));
+        Rf_setAttrib(image, Rf_install("width"), PROTECT(Rf_ScalarInteger(width)));
+        Rf_setAttrib(image, Rf_install("height"), PROTECT(Rf_ScalarInteger(height)));
+        Rf_setAttrib(image, Rf_install("channels"), PROTECT(Rf_ScalarInteger(channels)));
+        Rf_setAttrib(image, Rf_install("bitdepth"), PROTECT(Rf_ScalarInteger(state.info_png.color.bitdepth)));
+        Rf_setAttrib(image, Rf_install("filesize"), PROTECT(Rf_ScalarReal((double) png_size)));
+        Rf_setAttrib(image, Rf_install("interlaced"), PROTECT(Rf_ScalarLogical(state.info_png.interlace_method)));
+        
+        // If a palette is used, capture the number of colours
+        if (state.info_png.color.colortype == LCT_PALETTE)
+        {
+            Rf_setAttrib(image, Rf_install("palette"), PROTECT(Rf_ScalarInteger((int) state.info_png.color.palettesize)));
+            UNPROTECT(1);
+        }
+        
+        UNPROTECT(7);
     }
     
-    // Set the image dimensions
-    PROTECT(dim = Rf_allocVector(INTSXP,3));
-    int *dim_ptr = INTEGER(dim);
-    dim_ptr[0] = height;
-    dim_ptr[1] = width;
-    dim_ptr[2] = channels;
-    Rf_setAttrib(image, R_DimSymbol, dim);
-    
-    // Set the object class
-    PROTECT(class = Rf_allocVector(STRSXP,2));
-    SET_STRING_ELT(class, 0, Rf_mkChar("loder"));
-    SET_STRING_ELT(class, 1, Rf_mkChar("array"));
-    Rf_setAttrib(image, R_ClassSymbol, class);
-    
-    // Set the theoretical range of the data
-    PROTECT(range = Rf_allocVector(INTSXP,2));
-    INTEGER(range)[0] = 0;
-    INTEGER(range)[1] = 255;
-    Rf_setAttrib(image, Rf_install("range"), range);
-    
-    // If a background colour is defined in the file, convert it to a hex code
-    // and store it
+    // If a background colour is defined in the file, convert it to a hex code and store it
     if (state.info_png.background_defined)
     {
         sprintf(background, "#%X%X%X", state.info_png.background_r, state.info_png.background_g, state.info_png.background_b);
         Rf_setAttrib(image, Rf_install("background"), PROTECT(Rf_mkString(background)));
         UNPROTECT(1);
     }
-    
+
     // Set the aspect ratio or DPI/pixel size if available
     if (state.info_png.phys_defined)
     {
@@ -144,16 +184,55 @@ SEXP read_png (SEXP file_)
         }
     }
     
+    // Convert text chunks
+    if (state.info_png.itext_num > 0)
+    {
+        PROTECT(text_keys = Rf_allocVector(STRSXP, state.info_png.itext_num + state.info_png.text_num));
+        PROTECT(text_vals = Rf_allocVector(STRSXP, state.info_png.itext_num + state.info_png.text_num));
+        
+        for (size_t i=0; i<state.info_png.itext_num; i++)
+        {
+            SET_STRING_ELT(text_keys, i, Rf_mkCharCE(state.info_png.itext_transkeys[i], CE_UTF8));
+            SET_STRING_ELT(text_vals, i, Rf_mkCharCE(state.info_png.itext_strings[i], CE_UTF8));
+        }
+        for (size_t i=0; i<state.info_png.text_num; i++)
+        {
+            SET_STRING_ELT(text_keys, i+state.info_png.itext_num, Rf_mkChar(state.info_png.text_keys[i]));
+            SET_STRING_ELT(text_vals, i+state.info_png.itext_num, Rf_mkChar(state.info_png.text_strings[i]));
+        }
+        
+        Rf_setAttrib(text_vals, R_NamesSymbol, text_keys);
+        Rf_setAttrib(image, Rf_install("text"), text_vals);
+        UNPROTECT(2);
+    }
+    else if (state.info_png.text_num > 0)
+    {
+        PROTECT(text_keys = Rf_allocVector(STRSXP, state.info_png.text_num));
+        PROTECT(text_vals = Rf_allocVector(STRSXP, state.info_png.text_num));
+        
+        for (size_t i=0; i<state.info_png.text_num; i++)
+        {
+            SET_STRING_ELT(text_keys, i, Rf_mkChar(state.info_png.text_keys[i]));
+            SET_STRING_ELT(text_vals, i, Rf_mkChar(state.info_png.text_strings[i]));
+        }
+        
+        Rf_setAttrib(text_vals, R_NamesSymbol, text_keys);
+        Rf_setAttrib(image, Rf_install("text"), text_vals);
+        UNPROTECT(2);
+    }
+    
     // Tidy up
     lodepng_state_cleanup(&state);
     free(data);
     
-    UNPROTECT(4);
+    UNPROTECT(1);
     return image;
 }
 
-SEXP write_png (SEXP image_, SEXP file_, SEXP range_)
+SEXP write_png (SEXP image_, SEXP file_, SEXP compression_level_, SEXP interlace_)
 {
+    const int compression_level = Rf_asInteger(compression_level_);
+    const Rboolean interlace = (Rf_asLogical(interlace_) == TRUE);
     unsigned width, height, channels;
     
     // Read the image dimensions from the source object
@@ -181,14 +260,13 @@ SEXP write_png (SEXP image_, SEXP file_, SEXP range_)
     Rboolean add_alpha = FALSE;
     R_len_t length = (R_len_t) width * height * channels;
     
-    // Check for a range argument or attribute, or calculate range from data
-    SEXP range;
-    if (Rf_isNull(range_))
-        range_ = Rf_getAttrib(image_, Rf_install("range"));
-    if (!Rf_isNull(range_) && Rf_length(range_) == 2)
+    // Check for a range attribute, or calculate from data
+    SEXP range = Rf_getAttrib(image_, Rf_install("range"));
+    if (!Rf_isNull(range) && Rf_length(range) == 2)
     {
-        PROTECT(range = Rf_coerceVector(range_, REALSXP));
-        double *range_ptr = REAL(range);
+        SEXP dbl_range;
+        PROTECT(dbl_range = Rf_coerceVector(range, REALSXP));
+        double *range_ptr = REAL(dbl_range);
         min = (range_ptr[0] < range_ptr[1] ? range_ptr[0] : range_ptr[1]);
         max = (range_ptr[0] > range_ptr[1] ? range_ptr[0] : range_ptr[1]);
         UNPROTECT(1);
@@ -259,21 +337,10 @@ SEXP write_png (SEXP image_, SEXP file_, SEXP range_)
     // Set the final data representation
     switch (channels)
     {
-        case 1:
-        state.info_raw.colortype = LCT_GREY;
-        break;
-        
-        case 2:
-        state.info_raw.colortype = LCT_GREY_ALPHA;
-        break;
-        
-        case 3:
-        state.info_raw.colortype = LCT_RGB;
-        break;
-        
-        case 4:
-        state.info_raw.colortype = LCT_RGBA;
-        break;
+        case 1: state.info_raw.colortype = LCT_GREY;        break;
+        case 2: state.info_raw.colortype = LCT_GREY_ALPHA;  break;
+        case 3: state.info_raw.colortype = LCT_RGB;         break;
+        case 4: state.info_raw.colortype = LCT_RGBA;        break;
     }
     
     // Check for a background attribute and attach it to the state if present
@@ -310,6 +377,45 @@ SEXP write_png (SEXP image_, SEXP file_, SEXP range_)
         state.info_png.phys_y = (unsigned) round(*REAL(asp) * 1000.0);
     }
     
+    // Check for a text attribute
+    SEXP text_vals = Rf_getAttrib(image_, Rf_install("text"));
+    if (!Rf_isNull(text_vals))
+    {
+        const int text_length = Rf_length(text_vals);
+        SEXP text_keys = Rf_getAttrib(text_vals, R_NamesSymbol);
+        const Rboolean have_keys = !Rf_isNull(text_keys);
+        Rboolean warned = FALSE;
+        for (int i=0; i<text_length; i++)
+        {
+            const SEXP string = STRING_ELT(text_vals, i);
+            const cetype_t key_encoding = have_keys ? Rf_getCharCE(STRING_ELT(text_keys,i)) : CE_NATIVE;
+            const cetype_t string_encoding = Rf_getCharCE(string);
+            
+            if (key_encoding == CE_NATIVE && string_encoding == CE_NATIVE)
+                lodepng_add_text(&state.info_png, have_keys ? CHAR(STRING_ELT(text_keys,i)) : "Comment", CHAR(string));
+            else if (key_encoding == CE_UTF8 || string_encoding == CE_UTF8)
+                lodepng_add_itext(&state.info_png, "Comment", "", have_keys ? CHAR(STRING_ELT(text_keys,i)) : "Comment", CHAR(string));
+            else if (!warned)
+            {
+                Rf_warning("Text element with non-UTF-8 encoding ignored");
+                warned = TRUE;
+            }
+        }
+    }
+    
+    state.info_png.interlace_method = interlace;
+    
+    switch (compression_level)
+    {
+        case 0: state.encoder.zlibsettings = level0; break;
+        case 1: state.encoder.zlibsettings = level1; break;
+        case 2: state.encoder.zlibsettings = level2; break;
+        case 3: state.encoder.zlibsettings = level3; break;
+        case 4: state.encoder.zlibsettings = level4; break;
+        case 5: state.encoder.zlibsettings = level5; break;
+        case 6: state.encoder.zlibsettings = level6; break;
+    }
+    
     // Encode the data in memory
     const char *filename = CHAR(STRING_ELT(file_, 0));
     error = lodepng_encode(&png, &png_size, data, width, height, &state);
@@ -336,8 +442,8 @@ SEXP write_png (SEXP image_, SEXP file_, SEXP range_)
 }
 
 static R_CallMethodDef callMethods[] = {
-    { "read_png",   (DL_FUNC) &read_png,    1 },
-    { "write_png",  (DL_FUNC) &write_png,   3 },
+    { "read_png",   (DL_FUNC) &read_png,    2 },
+    { "write_png",  (DL_FUNC) &write_png,   4 },
     { NULL, NULL, 0 }
 };
 

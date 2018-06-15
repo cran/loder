@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/jonclayden/loder.svg?branch=master)](https://travis-ci.org/jonclayden/loder) [![Build status](https://ci.appveyor.com/api/projects/status/f8535c6s1f6alo7a?svg=true)](https://ci.appveyor.com/project/jonclayden/loder) [![codecov](https://codecov.io/gh/jonclayden/loder/branch/master/graph/badge.svg)](https://codecov.io/gh/jonclayden/loder)
+
 # Simple, dependency-free access to PNG images
 
 The `loder` package provides functions for easily reading from PNG image files and writing to them. It functions in a very similar way to Simon Urbanek's venerable [`png` package](https://github.com/s-u/png), but unlike that package it does not require external `libpng` and `zlib` libraries to be installed. Instead, `loder` includes Lode Vandevenne's compact LodePNG library, which provides self-contained PNG read and write functionality.
@@ -54,7 +56,17 @@ The `display` function from the [`mmand` package](https://github.com/jonclayden/
 mmand::display(image)
 ```
 
-Image data can be written back to a file using the `writePng` function. The theoretical numerical range of the pixel intensities (i.e., the black and white points) can be set using the `range` attribute or the argument of the same name.
+Metadata alone may be read using the `inspectPng` function, which also gives information about the compression level achieved:
+
+```r
+inspectPng(path)
+# PNG file: [...]/loder/extdata/pngsuite/cdfn2c08.png
+# - 32 x 8 pixels, RGB
+# - 8 bpp (uncompressed data size 768 B; file size is 404 B)
+# - Aspect ratio is 4 : 1
+```
+
+Image data can be written back to a file using the `writePng` function. The theoretical numerical range of the pixel intensities (i.e., the black and white points) can be set using the `range` attribute or an argument of the same name.
 
 ```r
 writePng(image, tempfile(), range=c(0,200))

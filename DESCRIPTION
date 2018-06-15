@@ -1,10 +1,10 @@
 Package: loder
-Version: 0.1.2
-Date: 2017-05-30
+Version: 0.2.0
+Date: 2018-06-15
 Title: Dependency-Free Access to PNG Image Files
 Authors@R: c(person("Jon", "Clayden", email="code@clayden.org", role=c("aut","cre")),
              person("Lode", "Vandevenne", role="aut"))
-Suggests: testthat
+Suggests: testthat, covr
 Description: Read and write access to PNG image files using the LodePNG
     library. The package has no external dependencies.
 License: BSD_3_clause + file LICENCE
@@ -14,9 +14,9 @@ BugReports: https://github.com/jonclayden/loder/issues
 LazyData: true
 RoxygenNote: 6.0.1
 NeedsCompilation: yes
-Packaged: 2017-05-30 13:20:49 UTC; jon
+Packaged: 2018-06-15 15:15:48 UTC; jon
 Author: Jon Clayden [aut, cre],
   Lode Vandevenne [aut]
 Maintainer: Jon Clayden <code@clayden.org>
 Repository: CRAN
-Date/Publication: 2017-05-30 15:35:55 UTC
+Date/Publication: 2018-06-15 15:49:55 UTC
